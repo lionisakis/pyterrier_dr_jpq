@@ -135,20 +135,20 @@ class _RepLLamaBiEncoderBase(BiEncoder):
 
     def encode_queries_torch(self, texts, batch_size=None):
         results = []
-        for chunk in chunked(texts, batch_size or self.batch_size):
-            inps = self.tokenizer([f'query: {query}</s>' for query in chunk], return_tensors='pt', padding=True, truncation=True, max_length=32)
-            inps = {k: v.to(self.device) for k, v in inps.items()}
-            q_hidden = self.model(**inps).last_hidden_state
-            attention_mask = inps['attention_mask']
-            # we want the last token representation that is not padding
-            sequence_lengths = attention_mask.sum(dim=1)
-            last_token_indices = sequence_lengths - 1
-            q_reps = q_hidden[torch.arange(q_hidden.size(0)), last_token_indices]
-            q_reps = torch.nn.functional.normalize(q_reps, p=2, dim=-1)
-            results.append(q_reps)
+        with torch.no_grad():
+            for chunk in chunked(texts, batch_size or self.batch_size):
+                inps = self.tokenizer([f'query: {query}</s>' for query in chunk], return_tensors='pt', padding=True, truncation=True, max_length=32)
+                inps = {k: v.to(self.device) for k, v in inps.items()}
+                q_hidden = self.model(**inps).last_hidden_state
+                attention_mask = inps['attention_mask']
+                sequence_lengths = attention_mask.sum(dim=1)
+                last_token_indices = sequence_lengths - 1
+                q_reps = q_hidden[torch.arange(q_hidden.size(0)), last_token_indices]
+                q_reps = torch.nn.functional.normalize(q_reps, p=2, dim=-1)
+                results.append(q_reps.float().cpu())  # cast + offload per batch
         if not results:
             return torch.empty((0, 0))
-        return torch.cat(results, dim=0).float()
+        return torch.cat(results, dim=0)  # cat on CPU, no GPU memory needed
 
     def encode_docs(self, texts, batch_size=None):
         results = []
