@@ -37,7 +37,8 @@ class LightningIRMonoScorer(pt.Transformer):
             pt.model.add_ranks(res)
             return res.sort_values(['qid', 'rank'])
 
-        tmp = inp.reset_index().rename(columns={'index': '_row'})
+        tmp = inp.reset_index(drop=True)
+        tmp['_row'] = tmp.index
         g = tmp.groupby('query', sort=False)[['_row', self.text_field]].agg(list)
 
         queries = g.index.tolist()                 # List[str]
